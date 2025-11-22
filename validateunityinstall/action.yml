@@ -1,0 +1,214 @@
+name: "Validate the Unity Build environment on server"
+description: "Inspects the environment for an existing Unity install within the major range requested, falls back to earlier releases if need be."
+author: "reality-collective"
+inputs:
+  unityversion:
+    description: "The version of Unity to validate"
+    required: true
+outputs:
+  unityeditorversion:
+    description: "Returns the version of Unity Editor the UPM package requires"
+    value: ${{ jobs.validate_unity_install.outputs.unityversion }}
+  unityeditorinstalled:
+    description: "Returns the version of Unity Editor the UPM package requires"
+    value: ${{ jobs.validate_unity_install.outputs.editorinstalled }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "1.0.0"
+        echo "Build Script Version: $scriptVersion"
+        echo "::endgroup::"
+      shell: pwsh
+    - id: validate
+      name: "Unity Project Validation"
+      run: |
+        echo "::group::Validating input"
+
+        $unityVersion = '${{ inputs.unityversion }}'
+        $installedResult = 0
+
+        echo "Unity version is $unityVersion"
+        echo "::endgroup::"
+
+        echo "::group::Set Hub and editor locations"
+
+        ## Set Hub and editor locations
+        if ( (-not $global:PSVersionTable.Platform) -or ($global:PSVersionTable.Platform -eq "Win32NT") )
+        {
+          $hubPath = "C:\Program Files\Unity Hub\Unity Hub.exe"
+          $editorRootPath = "C:\Program Files\Unity\Hub\Editor\"
+          $editorFileEx = "\Editor\Unity.exe"
+
+          #"Unity Hub.exe" -- --headless help
+          #. 'C:\Program Files\Unity Hub\Unity Hub.exe' -- --headless help
+          function unity-hub 
+          {
+            & $hubPath -- --headless $args.Split(" ") | Out-String
+          }            
+        }
+        elseif ( $global:PSVersionTable.OS.Contains("Darwin") ) 
+        {
+          $hubPath = "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
+          $editorRootPath = "/Applications/Unity/Hub/Editor/"
+          $editorFileEx = "/Unity.app/Contents/MacOS/Unity"
+
+          # /Applications/Unity\ Hub.app/Contents/MacOS/Unity\ Hub -- --headless help
+          function unity-hub 
+          {
+            & $hubPath -- --headless $args.Split(" ") | Out-String
+          }            
+        }
+        elseif ( $global:PSVersionTable.OS.Contains("Linux") ) 
+        {
+          $hubPath = "$HOME/Unity Hub/UnityHub.AppImage"
+          $editorRootPath = "$HOME/Unity/Hub/Editor/"
+          $editorFileEx = "/Editor/Unity"
+
+          # /UnityHub.AppImage --headless help
+          # xvfb-run --auto-servernum "$HOME/Unity Hub/UnityHub.AppImage" --headless help
+          function unity-hub 
+          {
+            xvfb-run --auto-servernum "$hubPath" --headless $args.Split(" ")
+          }            
+        }
+
+        echo "::endgroup::"
+
+        echo "::group::Checking Hub Installation"
+
+        # Install hub if not found
+        if ( -not (Test-Path -Path "$hubPath") ) {
+          echo "$(Get-Date): Downloading Unity Hub..."
+          $baseUrl = "https://public-cdn.cloud.unity3d.com/hub/prod";
+          $outPath = $PSScriptRoot
+          $wc = New-Object System.Net.WebClient
+          echo "$(Get-Date): Download Complete, Starting installation..."
+          if ((-not $global:PSVersionTable.Platform) -or ($global:PSVersionTable.Platform -eq "Win32NT")) {
+            $wc.DownloadFile("$baseUrl/UnityHubSetup.exe", "$outPath/UnityHubSetup.exe")
+            $startProcessArgs = @{
+              'FilePath'     = "$outPath/UnityHubSetup.exe";
+              'ArgumentList' = @('/S');
+              'PassThru'     = $true;
+              'Wait'         = $true;
+            }
+            # Run Installer
+            $process = Start-Process @startProcessArgs
+            if ( $process.ExitCode -ne 0) {
+              Write-Error "$(Get-Date): Failed with exit code: $($process.ExitCode)"
+              exit 1
+            }
+          }
+          elseif ($global:PSVersionTable.OS.Contains("Darwin")) {
+            $package = "UnityHubSetup.dmg"
+            $downloadPath = "$outPath/$package"
+            $wc.DownloadFile("$baseUrl/$package", $downloadPath)
+            $dmgVolume = (sudo hdiutil attach $downloadPath -nobrowse) | Select-String -Pattern '\/Volumes\/.*' -AllMatches | ForEach-Object { $_.Matches } | ForEach-Object { $_.Value } | select-object -first 1
+            echo $dmgVolume
+            $dmgAppPath = (find "$DMGVolume" -name "*.app" -depth 1)
+            echo $dmgAppPath
+            sudo cp -rf "`"$dmgAppPath`"" "/Applications"
+            hdiutil unmount $dmgVolume
+          }
+          elseif ($global:PSVersionTable.OS.Contains("Linux")) {
+            mkdir -pv "$HOME/Unity Hub" "$HOME/.config/Unity Hub" "$editorRootPath"
+            sudo apt-get update
+            sudo apt-get install -y libgconf-2-4 libglu1 libasound2 libgtk2.0-0 libgtk-3-0 libnss3 zenity xvfb
+            #https://www.linuxdeveloper.space/install-unity-linux/
+            $wc.DownloadFile("$baseUrl/UnityHub.AppImage", "$hubPath")
+            chmod -v a+x "$hubPath"
+            touch "$HOME/.config/Unity Hub/eulaAccepted"
+          }
+        }
+        if ( -not (Test-Path "$hubPath") ) {
+          Write-Error "$hubPath path not found!"
+          exit 1
+        }
+
+        function GetString($InputString, $InputPattern, $MatchIndex) 
+        {
+          $regExResult = $InputString | Select-String -Pattern $InputPattern
+          if($regExResult.Length -gt 0)
+          {
+            return $regExResult.Matches[$MatchIndex].Value
+          }
+          else 
+          {
+            return 0
+          }
+        }
+
+        function Get-LetterCount
+        {
+          Param ([string]$string)
+          return $string.Length
+        }          
+
+        echo "::group::Find Installed Unity version based on input"
+        echo "Unity hub path is {$hubPath}"
+        echo "Requested unity version is {$unityVersion}"
+
+        $InstalledUnityVersions = unity-hub editors
+        $editorRootPath = unity-hub ip -g
+        echo "Installed unity versions are {$InstalledUnityVersions}"
+        echo "Unity install path is {$editorRootPath}"
+
+        $versionLength = Get-LetterCount $unityVersion
+        if ($versionLength -eq 4) {
+          $queryUnityVersion = GetString $InstalledUnityVersions "$unityVersion.{4,7}" -MatchIndex 0
+        }
+        elseif ($versionLength -eq 6) {
+          $queryUnityVersion = GetString $InstalledUnityVersions "$unityVersion.{4,5}" -MatchIndex 0
+        }
+        else {
+          $queryUnityVersion = GetString $InstalledUnityVersions "$unityVersion" -MatchIndex 0
+        }
+
+        echo "Found unity version is {$queryUnityVersion} for input {$unityVersion}"
+
+        if ($queryUnityVersion -ne 0) 
+        {
+          $unityVersion = $queryUnityVersion.Trim(","," ").Trim()
+          echo "Long Unity version is $unityVersion"
+        }
+        else 
+        {
+          echo "Unity $unityVersion not found on this machine, skipping"
+          exit 0
+        }
+
+        echo "::endgroup::"
+
+        $editorPath = "{0}{1}{2}" -f $editorRootPath,$unityVersion,$editorFileEx
+
+        echo "Unity Hub found at `"$hubPath`""
+        echo ""
+        echo "Editor root path currently set to: `"$editorRootPath`""
+        echo ""
+        echo "Editor path currently set to: `"$editorPath`""
+        echo ""
+        unity-hub help
+        echo ""
+
+        echo "::endgroup::"
+
+        echo "::group::Checking Unity Editor Installation"              
+
+        if ( Test-Path -Path $editorPath ) 
+        {
+          $installedResult = 1
+        }
+
+        echo ""
+        echo "UnityEditor path set to: $editorPath"
+        echo ""
+        echo "Editor install result was $installedResult"
+        echo "unityeditorversion=$unityVersion" >> $GITHUB_OUTPUT
+        echo "unityeditorinstalled=$installedResult" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+        exit 0
+      shell: pwsh

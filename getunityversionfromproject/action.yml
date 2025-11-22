@@ -1,0 +1,57 @@
+name: "Get the Unity version required from a Unity Project"
+description: "Get the Unity version required from a Unity Project, expects a packageversion.txt file."
+author: "reality-collective"
+inputs:
+  version-file-path:
+    description: "Optional, specify a path to search for the unity project version text file. Use this if validation fails to find a valid project version file."
+    required: false
+outputs:
+  unityversion:
+    description: "Returns the version of Unity the UPM package requires"
+    value: ${{ steps.getVersion.outputs.unityversion }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "1.0.0"
+        echo "Build Script Version: $scriptVersion"
+        echo "::endgroup::"
+      shell: pwsh
+    - uses: actions/checkout@v5
+      with:
+        submodules: recursive
+        clean: true
+    - id: getversion
+      name: "Get Unity Package Version"
+      run: |
+        echo "::group::Validating input"
+
+        $versionFile = "${{ inputs.version-file-path }}"
+        if([string]::IsNullOrEmpty($versionFile))
+        {
+          echo 'version input was empty, using default'
+          $versionFile = '**/ProjectSettings/ProjectVersion.txt'
+        }
+
+        if ( -not (Test-Path -Path $versionFile) ) {
+          Write-Error "Failed to find a valid ProjectVersion.txt file"
+          exit 1
+        }
+
+        echo "::endgroup::"
+
+        echo "::group::Unity Version Project check"
+
+        $version = Get-Content $versionFile
+        $pattern = '(?<version>(?:(?<major>\d+)\.)?(?:(?<minor>\d+)\.)?(?:(?<patch>\d+[fab]\d+)\b))|((?:\((?<revision>\w+))\))'
+        $matches = $matches = [regex]::Matches($version, $pattern)
+        $unityVersion = $matches[1].Groups['version'].Value.Trim()
+
+        echo "Detected version is $unityVersion"
+        echo "unityversion=$unityVersion" >> $GITHUB_OUTPUT
+        echo "::endgroup::"
+
+      shell: pwsh
