@@ -7,7 +7,30 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
+# Ensure default token scopes and inherit org-level secrets via env mapping
+permissions:
+  contents: write
+  packages: read
+
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  GIT_PAT: ${{ secrets.GIT_PAT }}
+
 jobs:
+  test-secrets:
+    name: Secrets Inheritance Check
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Validate secrets presence (no values leaked)
+        run: |
+          missing=0
+          check() { var="$1"; if [ -z "${!var:-}" ]; then echo "::error::$var is missing or empty"; missing=1; else echo "$var is present"; fi; }
+          check GITHUB_TOKEN
+          check GIT_PAT
+          if [ $missing -ne 0 ]; then exit 1; fi
+        shell: bash
+
   test-version-actions:
     name: Test Version Retrieval Actions
     runs-on: ubuntu-latest
@@ -18,7 +41,7 @@ jobs:
           repository: realitycollective/com.realitycollective.package-test
           ref: main
           path: test-package
-          token: ${{ secrets.GIT_PAT }}
+          token: ${{ env.GIT_PAT }}
 
       - name: Test Get Package Version from Package
         id: get-package-version
@@ -91,7 +114,7 @@ jobs:
       - name: Get Current Version
         id: get-version
         run: |
-          VERSION=$(jq -r '.version' package.json)
+          VERSION=$(jq -r '.version' test-package/package.json)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
         shell: bash
         continue-on-error: true
@@ -100,8 +123,6 @@ jobs:
         uses: ./tagrelease
         with:
           version: ${{ steps.get-version.outputs.version }}-test
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
   test-upversion-action:
@@ -115,7 +136,7 @@ jobs:
           repository: realitycollective/com.realitycollective.package-test
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GIT_PAT }}
+          token: ${{ env.GIT_PAT }}
 
       - name: Test UpVersion Action (pre-release)
         id: upversion
@@ -123,8 +144,6 @@ jobs:
         with:
           build-type: 'pre-release'
           createTag: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Display Version Output
@@ -166,15 +185,13 @@ jobs:
           repository: realitycollective/com.realitycollective.package-test
           ref: main
           path: package
-          token: ${{ secrets.GIT_PAT }}
+          token: ${{ env.GIT_PAT }}
 
       - name: Test Run Unity UPM Multi-Version Build
         uses: ./rununityUPMbuild
         with:
           unity-version: ${{ matrix.unity-version }}
           build-target: ${{ matrix.build-target }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
 
       - name: Check Build Artifacts
@@ -199,7 +216,7 @@ jobs:
           repository: realitycollective/com.realitycollective.package-test
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GIT_PAT }}
+          token: ${{ env.GIT_PAT }}
 
       - name: Test Refresh Branch (commented out for safety)
         # run: |
@@ -211,6 +228,4 @@ jobs:
         with:
           target-branch: 'development'
           source-branch: 'main'
-        env:
-          GIT_PAT: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
