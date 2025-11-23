@@ -72,8 +72,15 @@ runs:
       run: |
         echo "::group::Setup Unity Editor"
         $unityVersion = '${{ steps.derive.outputs.unity-version }}'
-        $setup = unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-target }} --json
+        echo "Running: unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-target }} --json"
+        $setup = unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-target }} --json 2>&1
+        $exitCode = $LASTEXITCODE
+        echo "Exit code: $exitCode"
+        echo "Raw output:"
+        echo $setup
+        if($exitCode -ne 0) { Write-Warning "setup-unity returned non-zero exit code but continuing..." }
         $jsonLine = ($setup | Select-Object -Last 1)
+        echo "JSON line: $jsonLine"
         $editorInfo = $jsonLine | ConvertFrom-Json
         $editorPath = $editorInfo.unityEditorPath
         if([string]::IsNullOrEmpty($editorPath) -or -not (Test-Path $editorPath)) { Write-Error "Editor path not resolved"; exit 1 }
