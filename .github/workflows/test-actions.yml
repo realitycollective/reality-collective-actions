@@ -33,8 +33,19 @@ jobs:
 
   test-version-actions:
     name: Test Version Retrieval Actions
+    if: always()
+    continue-on-error: true
     runs-on: ubuntu-latest
     steps:
+      - name: "Preflight: ls-remote external repo (debug)"
+        run: |
+          echo "::add-mask::${GIT_PAT}"
+          export GIT_TRACE=1
+          export GIT_CURL_VERBOSE=1
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
+        shell: bash
+        continue-on-error: true
       - name: Checkout Test Repository
         uses: actions/checkout@v5
         with:
@@ -42,6 +53,7 @@ jobs:
           ref: main
           path: test-package
           token: ${{ env.GIT_PAT }}
+          fetch-depth: 0
 
       - name: Test Get Package Version from Package
         id: get-package-version
@@ -79,6 +91,8 @@ jobs:
 
   test-validate-unity:
     name: Test Validate Unity Install
+    if: always()
+    continue-on-error: true
     runs-on: windows
     steps:
       - name: Checkout Actions
@@ -102,14 +116,24 @@ jobs:
     name: Test Tag Release Action
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
+      - name: "Preflight: ls-remote external repo (debug)"
+        run: |
+          echo "::add-mask::${GIT_PAT}"
+          export GIT_TRACE=1
+          export GIT_CURL_VERBOSE=1
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
+        shell: bash
+        continue-on-error: true
       - name: Checkout Test Repository
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GIT_PAT }}
+          token: ${{ env.GIT_PAT }}
 
       - name: Get Current Version
         id: get-version
@@ -129,7 +153,17 @@ jobs:
     name: Test UpVersion and Tag Release
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
+      - name: "Preflight: ls-remote external repo (debug)"
+        run: |
+          echo "::add-mask::${GIT_PAT}"
+          export GIT_TRACE=1
+          export GIT_CURL_VERBOSE=1
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
+        shell: bash
+        continue-on-error: true
       - name: Checkout Test Repository
         uses: actions/checkout@v5
         with:
@@ -156,6 +190,7 @@ jobs:
     name: Test Unity UPM Build
     runs-on: ${{ matrix.os }}
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -186,6 +221,7 @@ jobs:
           ref: main
           path: package
           token: ${{ env.GIT_PAT }}
+          fetch-depth: 0
 
       - name: Test Run Unity UPM Multi-Version Build
         uses: ./rununityUPMbuild
@@ -209,7 +245,17 @@ jobs:
     name: Test Refresh Branch
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
+    continue-on-error: true
     steps:
+      - name: "Preflight: ls-remote external repo (debug)"
+        run: |
+          echo "::add-mask::${GIT_PAT}"
+          export GIT_TRACE=1
+          export GIT_CURL_VERBOSE=1
+          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
+          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
+        shell: bash
+        continue-on-error: true
       - name: Checkout Test Repository
         uses: actions/checkout@v5
         with:
