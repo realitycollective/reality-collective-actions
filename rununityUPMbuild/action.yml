@@ -64,7 +64,14 @@ runs:
     - name: Install/Update Unity Hub
       run: |
         echo "::group::Install/Update Unity Hub"
-        unity-cli hub-install --auto-update --verbose
+        $hubVersion = unity-cli hub-version 2>&1
+        if($LASTEXITCODE -eq 0) {
+          echo "Unity Hub already installed: $hubVersion"
+          echo "Skipping auto-update to avoid uninstaller issues on self-hosted runners"
+        } else {
+          echo "Installing Unity Hub..."
+          unity-cli hub-install --verbose
+        }
         echo "::endgroup::"
       shell: pwsh
     - name: Setup Unity Editor
