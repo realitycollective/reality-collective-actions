@@ -19,10 +19,13 @@ runs:
   using: "composite"
   steps:
     - name: Script Version
+      id: init
       run: |
         echo "::group::Script Versioning"
         $scriptVersion = "2.0.0"
         echo "Build Script Version: $scriptVersion"
+        $workflowWorkspace = Get-Location
+        echo "workflow-workspace=$workflowWorkspace" >> $env:GITHUB_OUTPUT
         echo "::endgroup::"
       shell: pwsh
     - name: Checkout (target or self)
@@ -155,7 +158,8 @@ runs:
         echo "::group::Run Unity headless"
         $unityVersion = '${{ steps.derive.outputs.unity-version }}'
         $projectPath = '${{ steps.project.outputs.project-path }}'
-        $logsDir = "Logs"
+        $workflowWorkspace = '${{ steps.init.outputs.workflow-workspace }}'
+        $logsDir = Join-Path $workflowWorkspace "Logs"
         if(Test-Path $logsDir){ Remove-Item $logsDir -Recurse -Force }
         New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
         $date = Get-Date -Format "yyyyMMddTHHmmss"
