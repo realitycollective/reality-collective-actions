@@ -8,10 +8,10 @@ inputs:
 outputs:
   unityeditorversion:
     description: "Returns the version of Unity Editor the UPM package requires"
-    value: ${{ jobs.validate_unity_install.outputs.unityversion }}
+    value: ${{ steps.validate.outputs.unityeditorversion }}
   unityeditorinstalled:
     description: "Returns the version of Unity Editor the UPM package requires"
-    value: ${{ jobs.validate_unity_install.outputs.editorinstalled }}
+    value: ${{ steps.validate.outputs.unityeditorinstalled }}
 
 runs:
   using: "composite"

@@ -2,8 +2,11 @@ name: "Run Single-Version Unity UPM Build"
 description: "Runs the standard Unity UPM build process for a single Unity version."
 author: "reality-collective"
 inputs:
-  unityVersion:
-    description: "The version of Unity to validate on"
+  unity-version:
+    description: "The version of Unity to build with"
+    required: true
+  build-target:
+    description: "The Unity build target platform (e.g., StandaloneWindows64, StandaloneLinux64, StandaloneOSX)"
     required: true
   dependencies:
     description: "json array of dependencies and their targets"
@@ -26,7 +29,8 @@ runs:
     - id: build
       name: "Run Unity Builds"
       run: |
-        $unityVersion = '${{ inputs.unityVersion }}'
+        $unityVersion = '${{ inputs.unity-version }}'
+        $unityMajorVersion = $unityVersion.Substring(0, 4)
 
         echo "::group::Set Hub and editor locations"
 
@@ -34,37 +38,46 @@ runs:
         if ( (-not $global:PSVersionTable.Platform) -or ($global:PSVersionTable.Platform -eq "Win32NT") )
         {
           $hubPath = "C:\Program Files\Unity Hub\Unity Hub.exe"
-          $editorRootPath = "C:\Program Files\Unity\Hub\Editor\"
 
           #"Unity Hub.exe" -- --headless help
           #. 'C:\Program Files\Unity Hub\Unity Hub.exe' -- --headless help
           function unity-hub 
           {
+            & $hubPath -- --headless $args.Split(" ") | Out-String
+          }
+          function unity-hub-raw
+          {
             & $hubPath -- --headless $args.Split(" ") | Out-String -NoNewline
-          }            
+          }
         }
         elseif ( $global:PSVersionTable.OS.Contains("Darwin") ) 
         {
           $hubPath = "/Applications/Unity Hub.app/Contents/MacOS/Unity Hub"
-          $editorRootPath = "/Applications/Unity/Hub/Editor/"
 
           # /Applications/Unity\ Hub.app/Contents/MacOS/Unity\ Hub -- --headless help
           function unity-hub 
           {
+            & $hubPath -- --headless $args.Split(" ") | Out-String
+          }
+          function unity-hub-raw 
+          {
             & $hubPath -- --headless $args.Split(" ") | Out-String -NoNewline
-          }            
+          }
         }
         elseif ( $global:PSVersionTable.OS.Contains("Linux") ) 
         {
           $hubPath = "$HOME/Unity Hub/UnityHub.AppImage"
-          $editorRootPath = "$HOME/Unity/Hub/Editor/"
 
           # /UnityHub.AppImage --headless help
           # xvfb-run --auto-servernum "$HOME/Unity Hub/UnityHub.AppImage" --headless help
           function unity-hub 
           {
             xvfb-run --auto-servernum "$hubPath" --headless $args.Split(" ")
-          }            
+          }
+          function unity-hub-raw 
+          {
+            xvfb-run --auto-servernum "$hubPath" --headless $args.Split(" ")
+          }
         }
 
         echo "::endgroup::"
@@ -91,12 +104,12 @@ runs:
         }
         echo "::endgroup::"
 
-        echo "::group::Find Installed Unity version based on input"
+        echo "::group::Get Installed Unity version based on Matrix"
         echo "Unity hub path is {$hubPath}"
         echo "Requested unity version is {$unityVersion}"
 
         $InstalledUnityVersions = unity-hub editors
-        $editorRootPath = unity-hub ip -g
+        $editorRootPath = unity-hub-raw ip -g
         echo "Installed unity versions are {$InstalledUnityVersions}"
         echo "Unity install path is {$editorRootPath}"
 
@@ -134,12 +147,12 @@ runs:
             $newversion = $source.Split(".")
             $newversion[2] = [int]$newversion[2] - 1
             if ([int]$newversion[2] -lt 1) {
-              echo "Unity ${{ inputs.unityVersion }} not found on this machine, skipping"
+              echo "Unity $unityVersion not found on this machine, skipping"
               exit 0
             }
-            $newunityVersion = "{0}.{1}.{2}f1" -f $newversion[0],$newversion[1],$newversion[2]
-            echo "Unity $unityVersion not found on this machine, trying $newunityVersion"
-            $unityVersion = $newunityVersion
+            $newUnityVersion = "{0}.{1}.{2}f1" -f $newversion[0],$newversion[1],$newversion[2]
+            echo "Unity $unityVersion not found on this machine, trying $newUnityVersion"
+            $unityVersion = $newUnityVersion
             $checkPath = Join-Path $editorRootPath $unityVersion
         }
         echo "::endgroup::"
@@ -195,7 +208,7 @@ runs:
 
         echo "::endgroup::"
 
-        echo "::group::Setup logging and run Unit tests"          
+        echo "::group::Setup logging and run Unit tests"
 
         # Log detail
         $logDirectory = "Logs"          
@@ -212,12 +225,12 @@ runs:
         # If run manually, the Refname is actually blank, so just use date
         if([string]::IsNullOrEmpty(${GITHUB_REF_NAME})) {
           $logName = Join-Path $logDirectory $date
-        }else {          
+        }else {
           $logName = Join-Path $logDirectory ${GITHUB_REF_NAME}-$date
         }
 
-        $logPath = "$logName.log"
-        $testsLogPath = "$logName-tests.xml"
+        $logPath = "$unityMajorVersion_${{ inputs.build-target }}_$logName.log"
+        $testsLogPath = "$unityMajorVersion_${{ inputs.build-target }}_$logName-tests.xml"
 
         echo "Logpath [$logPath]"
         echo "TestsPath [$testsLogPath]"
@@ -368,13 +381,13 @@ runs:
 
         echo "::endgroup::"
 
-        echo "::group::Run build"              
+        echo "::group::Run build"
 
         echo "---------------------------------------------"
         echo "Start Testing"
-        echo "Unity Command\n[unity-editor -projectPath $TempUnityProjectName -logfile $logPath -batchmode -nographics -quit -buildTarget ${{ matrix.build-target }}]"
+        echo "Unity Command\n[unity-editor -projectPath $TempUnityProjectName -logfile $logPath -batchmode -nographics -quit -buildTarget ${{ inputs.build-target }}]"
 
-        unity-editor -projectPath $TempUnityProjectName -logfile $logPath -batchmode -nographics -quit -buildTarget ${{ matrix.build-target }}
+        unity-editor -projectPath $TempUnityProjectName -logfile $logPath -batchmode -nographics -quit -buildTarget ${{ inputs.build-target }}
 
         echo "---------------------------------------------"
         echo "::group::Unity Unit tests Results"
@@ -403,5 +416,5 @@ runs:
     - uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: unity-build-log-${{ matrix.build-target }}
+        name: unity-build-log-${{ inputs.unity-version }}-${{ inputs.build-target }}
         path: Logs/**
