@@ -37,6 +37,9 @@ jobs:
     continue-on-error: true
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout Actions (this repo)
+        uses: actions/checkout@v5
+
       - name: "Preflight: ls-remote external repo (debug)"
         run: |
           echo "::add-mask::${GIT_PAT}"
@@ -117,6 +120,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     continue-on-error: true
     steps:
+      - name: Checkout Actions (this repo)
+        uses: actions/checkout@v5
+
       - name: "Preflight: ls-remote external repo (debug)"
         run: |
           echo "::add-mask::${GIT_PAT}"
@@ -153,6 +159,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     continue-on-error: true
     steps:
+      - name: Checkout Actions (this repo)
+        uses: actions/checkout@v5
+
       - name: "Preflight: ls-remote external repo (debug)"
         run: |
           echo "::add-mask::${GIT_PAT}"
@@ -243,6 +252,9 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     continue-on-error: true
     steps:
+      - name: Checkout Actions (this repo)
+        uses: actions/checkout@v5
+
       - name: "Preflight: ls-remote external repo (debug)"
         run: |
           echo "::add-mask::${GIT_PAT}"
