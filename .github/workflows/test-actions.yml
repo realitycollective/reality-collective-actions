@@ -45,6 +45,18 @@ jobs:
       - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
 
+      - name: Verify Local Action Path
+        run: |
+          Write-Host "Listing rununityUPMbuild directory contents";
+          if (Test-Path 'rununityUPMbuild/action.yml') {
+            Write-Host 'Found composite action file at rununityUPMbuild/action.yml';
+          } else {
+            Write-Host 'Composite action file NOT found; dumping tree';
+            Get-ChildItem -Recurse | Select-Object FullName
+            exit 1;
+          }
+        shell: pwsh
+
       - name: Run Unity UPM Build (unity-cli)
         uses: ./rununityUPMbuild
         with:
