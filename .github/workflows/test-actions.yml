@@ -50,7 +50,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
-          ref: main
           path: test-package
           token: ${{ env.GIT_PAT }}
           fetch-depth: 0
@@ -131,7 +130,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
-          ref: main
           fetch-depth: 0
           token: ${{ env.GIT_PAT }}
 
@@ -168,7 +166,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
-          ref: main
           fetch-depth: 0
           token: ${{ env.GIT_PAT }}
 
@@ -218,7 +215,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
-          ref: main
           path: package
           token: ${{ env.GIT_PAT }}
           fetch-depth: 0
@@ -260,7 +256,6 @@ jobs:
         uses: actions/checkout@v5
         with:
           repository: realitycollective/com.realitycollective.package-test
-          ref: main
           fetch-depth: 0
           token: ${{ env.GIT_PAT }}
 
