@@ -17,171 +17,6 @@ env:
   GIT_PAT: ${{ secrets.GIT_PAT }}
 
 jobs:
-  test-secrets:
-    name: Secrets Inheritance Check
-    runs-on: ubuntu-latest
-    continue-on-error: true
-    steps:
-      - name: Validate secrets presence (no values leaked)
-        run: |
-          missing=0
-          check() { var="$1"; if [ -z "${!var:-}" ]; then echo "::error::$var is missing or empty"; missing=1; else echo "$var is present"; fi; }
-          check GITHUB_TOKEN
-          check GIT_PAT
-          if [ $missing -ne 0 ]; then exit 1; fi
-        shell: bash
-
-  test-version-actions:
-    name: Test Version Retrieval Actions
-    if: always()
-    continue-on-error: true
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout Test Repository
-        uses: actions/checkout@v5
-        with:
-          repository: realitycollective/com.realitycollective.package-test
-          token: ${{ env.GIT_PAT }}
-        continue-on-error: true
-
-      - name: Test Get Package Version from Package
-        id: get-package-version
-        uses: realitycollective/reality-collective-actions/getpackageversionfrompackage@main
-        with:
-          version-file-path: package.json
-        continue-on-error: true
-
-      - name: Validate Package Version Output
-        run: |
-          echo "Package Version: ${{ steps.get-package-version.outputs.packageversion }}"
-          if [ -z "${{ steps.get-package-version.outputs.packageversion }}" ]; then
-            echo "Error: Package version is empty"
-            exit 1
-          fi
-        shell: bash
-        continue-on-error: true
-
-      - name: Test Get Unity Version from Package
-        id: get-unity-version-package
-        uses: realitycollective/reality-collective-actions/getunityversionfrompackage@main
-        with:
-          version-file-path: package.json
-        continue-on-error: true
-
-      - name: Validate Unity Version from Package Output
-        run: |
-          echo "Unity Version: ${{ steps.get-unity-version-package.outputs.unityversion }}"
-          if [ -z "${{ steps.get-unity-version-package.outputs.unityversion }}" ]; then
-            echo "Error: Unity version is empty"
-            exit 1
-          fi
-        shell: bash
-        continue-on-error: true
-
-  test-validate-unity:
-    name: Test Validate Unity Install
-    if: always()
-    continue-on-error: true
-    runs-on: windows
-    steps:
-      - name: Checkout Actions
-        uses: actions/checkout@v5
-
-      - name: Test Validate Unity Install
-        id: validate-unity
-        uses: realitycollective/reality-collective-actions/validateunityinstall@main
-        with:
-          unityversion: '6000.0'
-        continue-on-error: true
-
-      - name: Display Unity Version Output
-        if: always()
-        run: |
-          echo "Unity Editor Version: ${{ steps.validate-unity.outputs.unityeditorversion }}"
-          echo "Unity Editor Installed: ${{ steps.validate-unity.outputs.unityeditorinstalled }}"
-        shell: pwsh
-        continue-on-error: true
-
-  test-tag-release:
-    name: Test Tag Release Action
-    runs-on: ubuntu-latest
-    if: always()
-    continue-on-error: true
-    steps:
-      - name: Checkout Actions (this repo)
-        uses: actions/checkout@v5
-
-      - name: "Preflight: ls-remote external repo (debug)"
-        run: |
-          echo "::add-mask::${GIT_PAT}"
-          export GIT_TRACE=1
-          export GIT_CURL_VERBOSE=1
-          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
-          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
-        shell: bash
-        continue-on-error: true
-      - name: Checkout Test Repository
-        uses: actions/checkout@v5
-        with:
-          repository: realitycollective/com.realitycollective.package-test
-          token: ${{ env.GIT_PAT }}
-          fetch-depth: 0
-        continue-on-error: true
-
-      - name: Get Current Version
-        id: get-version
-        run: |
-          VERSION=$(jq -r '.version' test-package/package.json)
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-        shell: bash
-        continue-on-error: true
-
-      - name: Test Tag Release (Dry Run)
-        uses: ./tagrelease
-        with:
-          version: ${{ steps.get-version.outputs.version }}-test
-        continue-on-error: true
-
-  test-upversion-action:
-    name: Test UpVersion and Tag Release
-    runs-on: ubuntu-latest
-    if: always()
-    continue-on-error: true
-    steps:
-      - name: Checkout Actions (this repo)
-        uses: actions/checkout@v5
-
-      - name: "Preflight: ls-remote external repo (debug)"
-        run: |
-          echo "::add-mask::${GIT_PAT}"
-          export GIT_TRACE=1
-          export GIT_CURL_VERBOSE=1
-          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
-          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
-        shell: bash
-        continue-on-error: true
-      - name: Checkout Test Repository
-        uses: actions/checkout@v5
-        with:
-          repository: realitycollective/com.realitycollective.package-test
-          token: ${{ env.GIT_PAT }}
-          fetch-depth: 0
-        continue-on-error: true
-
-      - name: Test UpVersion Action (pre-release)
-        id: upversion
-        uses: ./upversionandtagrelease
-        with:
-          build-type: 'pre-release'
-          createTag: false
-        continue-on-error: true
-
-      - name: Display Version Output
-        run: |
-          echo "New Package Version: ${{ steps.upversion.outputs.packageversion }}"
-        shell: pwsh
-        continue-on-error: true
-
   test-unity-build:
     name: Test Unity UPM Build
     runs-on: ${{ matrix.os }}
@@ -192,41 +27,33 @@ jobs:
       matrix:
         include:
           - os: windows
-            unity-version: 6000.0
+            unity-version: 6000
             build-target: Android
           - os: windows
-            unity-version: 6000.0
+            unity-version: 6000
             build-target: StandaloneWindows64
           - os: windows
-            unity-version: 6000.0
+            unity-version: 6000
             build-target: WSAPlayer
           - os: macos
-            unity-version: 6000.0
+            unity-version: 6000
             build-target: iOS
           - os: macos
-            unity-version: 6000.0
+            unity-version: 6000
             build-target: StandaloneOSX
     steps:
-      - name: Checkout Actions
+      - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
 
-      - name: Checkout Test Package
-        uses: actions/checkout@v5
-        with:
-          repository: realitycollective/com.realitycollective.package-test
-          path: package
-          token: ${{ env.GIT_PAT }}
-          fetch-depth: 0
-        continue-on-error: true
-
-      - name: Test Run Unity UPM Multi-Version Build
+      - name: Run Unity UPM Build (unity-cli)
         uses: ./rununityUPMbuild
         with:
+          repository: realitycollective/com.realitycollective.package-test
           unity-version: ${{ matrix.unity-version }}
           build-target: ${{ matrix.build-target }}
         continue-on-error: true
 
-      - name: Check Build Artifacts
+      - name: Check Build Logs
         run: |
           if (Test-Path "Logs") {
             Write-Host "Build logs generated successfully"
@@ -235,42 +62,4 @@ jobs:
             Write-Host "No build logs found"
           }
         shell: pwsh
-        continue-on-error: true
-
-  test-refresh-branch:
-    name: Test Refresh Branch
-    runs-on: ubuntu-latest
-    if: always()
-    continue-on-error: true
-    steps:
-      - name: Checkout Actions (this repo)
-        uses: actions/checkout@v5
-
-      - name: "Preflight: ls-remote external repo (debug)"
-        run: |
-          echo "::add-mask::${GIT_PAT}"
-          export GIT_TRACE=1
-          export GIT_CURL_VERBOSE=1
-          git config --global url."https://x-access-token:${GIT_PAT}@github.com/".insteadOf "https://github.com/"
-          git ls-remote https://github.com/realitycollective/com.realitycollective.package-test.git
-        shell: bash
-        continue-on-error: true
-      - name: Checkout Test Repository
-        uses: actions/checkout@v5
-        with:
-          repository: realitycollective/com.realitycollective.package-test
-          fetch-depth: 0
-          token: ${{ env.GIT_PAT }}
-        continue-on-error: true
-
-      - name: Test Refresh Branch (commented out for safety)
-        # run: |
-        #   echo "Refresh branch action would be tested here"
-        #   echo "Skipping actual execution to prevent unwanted branch updates"
-        # shell: bash
-        # Uncomment below to actually test (ensure you have appropriate branch setup)
-        uses: ./refreshbranch
-        with:
-          target-branch: 'development'
-          source-branch: 'main'
         continue-on-error: true
