@@ -123,7 +123,7 @@ runs:
             $depName = $_.Name
             $depUrl = $_.Value
             $depPath = $depName.Replace('/','_')
-            $cloneURL = "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@$depUrl"
+            $cloneURL = "https://${{ github.actor }}:${{ github.token }}@$depUrl"
             echo "Cloning $depName from $depUrl"
             git clone -b $depName --single-branch $cloneURL $depPath
             if(-not (Test-Path $depPath)) { Write-Error "Failed to clone $depName"; exit 1 }
