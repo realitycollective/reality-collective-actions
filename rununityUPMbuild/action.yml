@@ -8,8 +8,8 @@ inputs:
   unity-version:
     description: "Optional override Unity version (otherwise read from package.json 'unity')"
     required: false
-  build-target:
-    description: "Unity build target (e.g. StandaloneWindows64, StandaloneLinux64, StandaloneOSX)"
+  build-targets:
+    description: "Comma-separated Unity build targets (e.g. StandaloneWindows64, StandaloneLinux64, StandaloneOSX, Android, iOS, VisionOS)"
     required: true
   dependencies:
     description: "JSON array of dependency objects: [{\"DependencyBranch\": \"domain/repo.git\"}]"
@@ -35,7 +35,7 @@ runs:
         submodules: recursive
         clean: true
     - name: Setup Node
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: 20
     - name: Install unity-cli
@@ -59,40 +59,6 @@ runs:
         $unityVersion = if([string]::IsNullOrEmpty($override)) { $derived } else { $override }
         echo "Using Unity Version: $unityVersion"
         echo "unity-version=$unityVersion" >> $env:GITHUB_OUTPUT
-        echo "::endgroup::"
-      shell: pwsh
-    - name: Install/Update Unity Hub
-      run: |
-        echo "::group::Install/Update Unity Hub"
-        $hubVersion = unity-cli hub-version 2>&1
-        if($LASTEXITCODE -eq 0) {
-          echo "Unity Hub already installed: $hubVersion"
-          echo "Skipping auto-update to avoid uninstaller issues on self-hosted runners"
-        } else {
-          echo "Installing Unity Hub..."
-          unity-cli hub-install --verbose
-        }
-        echo "::endgroup::"
-      shell: pwsh
-    - name: Setup Unity Editor
-      id: editor
-      run: |
-        echo "::group::Setup Unity Editor"
-        $unityVersion = '${{ steps.derive.outputs.unity-version }}'
-        echo "Running: unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-target }} --json"
-        $setup = unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-target }} --json 2>&1
-        $exitCode = $LASTEXITCODE
-        echo "Exit code: $exitCode"
-        echo "Raw output:"
-        echo $setup
-        if($exitCode -ne 0) { Write-Warning "setup-unity returned non-zero exit code but continuing..." }
-        $jsonLine = ($setup | Select-Object -Last 1)
-        echo "JSON line: $jsonLine"
-        $editorInfo = $jsonLine | ConvertFrom-Json
-        $editorPath = $editorInfo.unityEditorPath
-        if([string]::IsNullOrEmpty($editorPath) -or -not (Test-Path $editorPath)) { Write-Error "Editor path not resolved"; exit 1 }
-        echo "Resolved Editor: $editorPath"
-        echo "UNITY_EDITOR_PATH=$editorPath" >> $env:GITHUB_ENV
         echo "::endgroup::"
       shell: pwsh
     - name: Create Temp Unity Project
@@ -166,26 +132,46 @@ runs:
         echo "Dependencies updated in manifest.json"
         echo "::endgroup::"
       shell: pwsh
-    - name: Run Unity (switch build target)
+    - name: Run Unity (switch build targets)
       id: run
       run: |
-        echo "::group::Run Unity headless"
+        echo "::group::Run Unity headless for multiple build targets"
         $unityVersion = '${{ steps.derive.outputs.unity-version }}'
         $projectPath = '${{ steps.project.outputs.project-path }}'
         $workflowWorkspace = '${{ steps.init.outputs.workflow-workspace }}'
         $logsDir = Join-Path $workflowWorkspace "Logs"
         if(Test-Path $logsDir){ Remove-Item $logsDir -Recurse -Force }
         New-Item -ItemType Directory -Force -Path $logsDir | Out-Null
-        $date = Get-Date -Format "yyyyMMddTHHmmss"
-        $logFile = Join-Path $logsDir "${unityVersion}_${{ inputs.build-target }}_${date}.log"
-        unity-cli run --unity-project $projectPath -quit -batchmode -nographics -buildTarget ${{ inputs.build-target }} -logFile $logFile
-        if($LASTEXITCODE -ne 0) { Write-Error "Unity run failed (exit $LASTEXITCODE)" }
-        echo "log-file=$logFile" >> $env:GITHUB_OUTPUT
+        
+        $buildTargetsInput = '${{ inputs.build-targets }}'
+        $buildTargets = $buildTargetsInput -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+        
+        echo "Processing $($buildTargets.Count) build target(s): $($buildTargets -join ', ')"
+        
+        $allLogFiles = @()
+        foreach($buildTarget in $buildTargets) {
+          echo "::group::Building for $buildTarget"
+          $date = Get-Date -Format "yyyyMMddTHHmmss"
+          $logFile = Join-Path $logsDir "${unityVersion}_${buildTarget}_${date}.log"
+          echo "Running Unity with build target: $buildTarget"
+          unity-cli run --unity-project $projectPath -quit -batchmode -nographics -buildTarget $buildTarget -logFile $logFile
+          if($LASTEXITCODE -ne 0) { 
+            Write-Error "Unity run failed for $buildTarget (exit $LASTEXITCODE)"
+            echo "::endgroup::"
+            exit $LASTEXITCODE
+          }
+          $allLogFiles += $logFile
+          echo "Successfully completed build target: $buildTarget"
+          echo "::endgroup::"
+        }
+        
+        $logFilesList = $allLogFiles -join ','
+        echo "log-files=$logFilesList" >> $env:GITHUB_OUTPUT
         echo "::endgroup::"
       shell: pwsh
     - name: Upload Logs
       if: always()
       uses: actions/upload-artifact@v4
       with:
-        name: unity-build-log-${{ steps.derive.outputs.unity-version }}-${{ inputs.build-target }}
+        name: unity-build-logs-${{ steps.derive.outputs.unity-version }}
         path: Logs/**

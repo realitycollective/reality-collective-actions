@@ -38,6 +38,9 @@ jobs:
             build-targets: StandaloneOSX, Android, iOS, VisionOS
             modules: mac-server
     steps:
+      - name: Checkout Actions (composite source)
+        uses: actions/checkout@v5
+      
       - uses: RageAgainstThePixel/unity-setup@v2
         id: unity-setup
         with:
@@ -64,3 +67,22 @@ jobs:
           license: 'Personal' # Choose license type to use [ Personal, Professional, Floating ]
           username: ${{ secrets.UNITY_USER}}
           password: ${{ secrets.UNITY_ACC}}
+
+      - name: Run Unity UPM Build (unity-cli)
+        uses: ./rununityUPMbuild
+        with:
+          repository: realitycollective/com.realitycollective.package-test
+          unity-version: ${{ matrix.unity-version }}
+          build-targets: ${{ matrix.build-targets }}
+        continue-on-error: true
+
+      - name: Check Build Logs
+        run: |
+          if (Test-Path "Logs") {
+            Write-Host "Build logs generated successfully"
+            Get-ChildItem -Path "Logs" -Recurse
+          } else {
+            Write-Host "No build logs found"
+          }
+        shell: pwsh
+        continue-on-error: true
