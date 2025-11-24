@@ -2,9 +2,9 @@ name: Test Composite Actions
 
 on:
   push:
-    branches: [ main, development ]
+    branches: [main, development]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
 
 # Ensure default token scopes and inherit org-level secrets via env mapping
@@ -29,19 +29,19 @@ jobs:
           - 6000
         include:
           - os: ubuntu-latest
-            build-targets: StandaloneLinux64,Android,iOS
+            build-targets: StandaloneLinux64, Android, iOS
           - os: windows-latest
-            build-targets: StandaloneWindows64,Android,WSAPlayer
+            build-targets: StandaloneWindows64, Android, WSAPlayer
           - os: macos-latest
-            build-targets: StandaloneOSX,Android,iOS,VisionOS
+            build-targets: StandaloneOSX, Android, iOS, VisionOS
     steps:
       - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
-      
+
       - uses: buildalon/unity-setup@v2
         id: unity-setup
         with:
-          version-file: 'None'
+          version-file: "None"
           unity-version: ${{ matrix.unity-version }} # overrides version in version-file
           build-targets: ${{ matrix.build-targets }}
 
@@ -60,6 +60,25 @@ jobs:
 
       - uses: buildalon/activate-unity-license@v2
         with:
-          license: 'Personal' # Choose license type to use [ Personal, Professional, Floating ]
+          license: "Personal" # Choose license type to use [ Personal, Professional, Floating ]
           username: ${{ secrets.UNITY_USER}}
           password: ${{ secrets.UNITY_ACC}}
+
+      - name: Run Unity UPM Build (unity-cli)
+        uses: ./rununityUPMbuild
+        with:
+          repository: realitycollective/com.realitycollective.package-test
+          unity-version: ${{ matrix.unity-version }}
+          build-targets: ${{ matrix.build-targets }}
+        continue-on-error: true
+
+      - name: Check Build Logs
+        run: |
+          if (Test-Path "Logs") {
+            Write-Host "Build logs generated successfully"
+            Get-ChildItem -Path "Logs" -Recurse
+          } else {
+            Write-Host "No build logs found"
+          }
+        shell: pwsh
+        continue-on-error: true
