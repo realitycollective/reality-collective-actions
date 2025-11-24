@@ -1,0 +1,65 @@
+name: "Setup Unity and Unity Hub"
+description: "Check the environment has the required version of Unity installed."
+author: "reality-collective"
+inputs:
+  unity-version:
+    description: "Optional override Unity version (otherwise read from package.json 'unity')"
+    required: false
+  build-targets:
+    description: "Unity build target (e.g. StandaloneWindows64, StandaloneLinux64, StandaloneOSX)"
+    required: true
+  license-type:
+    description: "Unity license type (e.g. Personal, Professional, Floating)"
+    required: true
+  email:
+    description: "Unity account email for license activation"
+    required: true
+  password:
+    description: "Unity account password for license activation"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      uses: actions/setup-node@v6
+      with:
+        node-version: 20
+    - name: Install unity-cli
+      run: |
+        echo "::group::Install unity-cli"
+        npm install -g @rage-against-the-pixel/unity-cli
+        unity-cli --help > NUL 2>&1 || exit 1
+        echo "unity-cli installed"
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Install/Update Unity Hub
+      run: |
+        echo "::group::Install/Update Unity Hub"
+        unity-cli hub-install --auto-update --verbose
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Setup Unity Editor
+      id: editor
+      run: |
+        echo "::group::Setup Unity Editor"
+        $unityVersion = '${{ inputs.unity-version }}'
+        $setup = unity-cli setup-unity --unity-version $unityVersion --build-targets ${{ inputs.build-targets }} --json
+        $jsonLine = ($setup | Select-Object -Last 1)
+        $editorInfo = $jsonLine | ConvertFrom-Json
+        $editorPath = $editorInfo.unityEditorPath
+        if([string]::IsNullOrEmpty($editorPath) -or -not (Test-Path $editorPath)) { Write-Error "Editor path not resolved"; exit 1 }
+        echo "Resolved Editor: $editorPath"
+        echo "UNITY_EDITOR_PATH=$editorPath" >> $env:GITHUB_ENV
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Activate Unity License
+      run: |
+        echo "::group::Activate Unity License"
+        $unityVersion = '${{ inputs.unity-version }}'
+        $licenseType = '${{ inputs.license-type }}'
+        $email = '${{ inputs.email }}'
+        $password = '${{ inputs.password }}'
+        unity-cli activate-license --unity-version $unityVersion --license-type $licenseType --username $email --password $password --verbose
+        echo "::endgroup::"
+      shell: pwsh      

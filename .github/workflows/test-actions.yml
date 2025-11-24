@@ -41,48 +41,12 @@ jobs:
       - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
       
-      - uses: RageAgainstThePixel/unity-setup@v2
-        id: unity-setup
-        with:
-          version-file: 'path/to/your/ProjectSettings.ProjectVersion.txt'
-          unity-version: ${{ matrix.unity-version }} # overrides version in version-file
-          build-targets: ${{ matrix.build-targets }}
-          modules: ${{ matrix.modules }}
-
-      - run: |
-          echo "Step Outputs:"
-          echo "steps.unity-setup.unity-hub-path: '${{ steps.unity-setup.outputs.unity-hub-path }}'"
-          echo "steps.unity-setup.unity-editors: '${{ steps.unity-setup.outputs.unity-editors }}'"
-          echo "steps.unity-setup.unity-editor-path: '${{ steps.unity-setup.outputs.unity-editor-path }}'"
-          echo "steps.unity-setup.unity-project-path: '${{ steps.unity-setup.outputs.unity-project-path }}'"
-
-          echo "Environment Variables:"
-          echo "UNITY_HUB_PATH: '${{ env.UNITY_HUB_PATH }}'"
-          echo "UNITY_EDITORS: '${{ env.UNITY_EDITORS }}'"
-          echo "UNITY_EDITOR_PATH: '${{ env.UNITY_EDITOR_PATH }}'"
-          echo "UNITY_PROJECT_PATH: '${{ env.UNITY_PROJECT_PATH }}'"
-
-      - uses: RageAgainstThePixel/activate-unity-license@v2
-        with:
-          license: 'Personal' # Choose license type to use [ Personal, Professional, Floating ]
-          username: ${{ secrets.UNITY_USER}}
-          password: ${{ secrets.UNITY_ACC}}
-
       - name: Run Unity UPM Build (unity-cli)
         uses: ./rununityUPMbuild
         with:
-          repository: realitycollective/com.realitycollective.package-test
           unity-version: ${{ matrix.unity-version }}
           build-targets: ${{ matrix.build-targets }}
-        continue-on-error: true
-
-      - name: Check Build Logs
-        run: |
-          if (Test-Path "Logs") {
-            Write-Host "Build logs generated successfully"
-            Get-ChildItem -Path "Logs" -Recurse
-          } else {
-            Write-Host "No build logs found"
-          }
-        shell: pwsh
+          license-type: Personal
+          email: ${{ secrets.UNITY_USER }}
+          password: ${{ secrets.UNITY_ACC }}
         continue-on-error: true
