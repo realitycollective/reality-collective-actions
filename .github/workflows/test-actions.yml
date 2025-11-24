@@ -41,6 +41,7 @@ jobs:
       - uses: buildalon/unity-setup@v2
         id: unity-setup
         with:
+          version-file: 'None'
           unity-version: ${{ matrix.unity-version }} # overrides version in version-file
           build-targets: ${{ matrix.build-targets }}
 
