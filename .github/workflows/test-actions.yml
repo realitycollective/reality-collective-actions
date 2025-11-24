@@ -29,19 +29,19 @@ jobs:
           - 6000
         include:
           - os: ubuntu-latest
-            build-targets: StandaloneLinux64, Android, iOS
+            build-targets: StandaloneLinux64,Android,iOS
             modules: linux-server
           - os: windows-latest
-            build-targets: StandaloneWindows64, Android, WSAPlayer
+            build-targets: StandaloneWindows64,Android,WSAPlayer
             modules: windows-server
           - os: macos-latest
-            build-targets: StandaloneOSX, Android, iOS, VisionOS
+            build-targets: StandaloneOSX,Android,iOS,VisionOS
             modules: mac-server
     steps:
       - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
       
-      - name: Run Unity UPM Build (unity-cli)
+      - name: Validate Unity Install (unity-cli)
         uses: ./setup-unity
         with:
           unity-version: ${{ matrix.unity-version }}
