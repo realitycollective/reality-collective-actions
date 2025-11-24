@@ -30,23 +30,35 @@ jobs:
         include:
           - os: ubuntu-latest
             build-targets: StandaloneLinux64,Android,iOS
-            modules: linux-server
           - os: windows-latest
             build-targets: StandaloneWindows64,Android,WSAPlayer
-            modules: windows-server
           - os: macos-latest
             build-targets: StandaloneOSX,Android,iOS,VisionOS
-            modules: mac-server
     steps:
       - name: Checkout Actions (composite source)
         uses: actions/checkout@v5
       
-      - name: Validate Unity Install (unity-cli)
-        uses: ./setup-unity
+      - uses: buildalon/unity-setup@v2
+        id: unity-setup
         with:
-          unity-version: ${{ matrix.unity-version }}
+          unity-version: ${{ matrix.unity-version }} # overrides version in version-file
           build-targets: ${{ matrix.build-targets }}
-          license-type: Personal
-          email: ${{ secrets.UNITY_USER }}
-          password: ${{ secrets.UNITY_ACC }}
-        continue-on-error: true
+
+      - run: |
+          echo "Step Outputs:"
+          echo "steps.unity-setup.unity-hub-path: '${{ steps.unity-setup.outputs.unity-hub-path }}'"
+          echo "steps.unity-setup.unity-editors: '${{ steps.unity-setup.outputs.unity-editors }}'"
+          echo "steps.unity-setup.unity-editor-path: '${{ steps.unity-setup.outputs.unity-editor-path }}'"
+          echo "steps.unity-setup.unity-project-path: '${{ steps.unity-setup.outputs.unity-project-path }}'"
+
+          echo "Environment Variables:"
+          echo "UNITY_HUB_PATH: '${{ env.UNITY_HUB_PATH }}'"
+          echo "UNITY_EDITORS: '${{ env.UNITY_EDITORS }}'"
+          echo "UNITY_EDITOR_PATH: '${{ env.UNITY_EDITOR_PATH }}'"
+          echo "UNITY_PROJECT_PATH: '${{ env.UNITY_PROJECT_PATH }}'"
+
+      - uses: buildalon/activate-unity-license@v2
+        with:
+          license: 'Personal' # Choose license type to use [ Personal, Professional, Floating ]
+          username: ${{ secrets.UNITY_USER}}
+          password: ${{ secrets.UNITY_ACC}}
