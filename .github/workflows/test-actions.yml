@@ -23,55 +23,44 @@ jobs:
     if: always()
     continue-on-error: true
     strategy:
-      fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        unity-version:
+          - 6000
         include:
-          - os: windows
-            unity-version: 6000
-            build-target: Android
-          - os: windows
-            unity-version: 6000
-            build-target: StandaloneWindows64
-          - os: windows
-            unity-version: 6000
-            build-target: WSAPlayer
-          - os: macos
-            unity-version: 6000
-            build-target: iOS
-          - os: macos
-            unity-version: 6000
-            build-target: StandaloneOSX
+          - os: ubuntu-latest
+            build-targets: StandaloneLinux64, Android, iOS
+            modules: linux-server
+          - os: windows-latest
+            build-targets: StandaloneWindows64, Android, WSAPlayer
+            modules: windows-server
+          - os: macos-latest
+            build-targets: StandaloneOSX, Android, iOS, VisionOS
+            modules: mac-server
     steps:
-      - name: Checkout Actions (composite source)
-        uses: actions/checkout@v5
-
-      - name: Verify Local Action Path
-        run: |
-          Write-Host "Listing rununityUPMbuild directory contents";
-          if (Test-Path 'rununityUPMbuild/action.yml') {
-            Write-Host 'Found composite action file at rununityUPMbuild/action.yml';
-          } else {
-            Write-Host 'Composite action file NOT found; dumping tree';
-            Get-ChildItem -Recurse | Select-Object FullName
-            exit 1;
-          }
-        shell: pwsh
-
-      - name: Run Unity UPM Build (unity-cli)
-        uses: ./rununityUPMbuild
+      - uses: RageAgainstThePixel/unity-setup@v2
+        id: unity-setup
         with:
-          repository: realitycollective/com.realitycollective.package-test
-          unity-version: ${{ matrix.unity-version }}
-          build-target: ${{ matrix.build-target }}
-        continue-on-error: true
+          version-file: 'path/to/your/ProjectSettings.ProjectVersion.txt'
+          unity-version: ${{ matrix.unity-version }} # overrides version in version-file
+          build-targets: ${{ matrix.build-targets }}
+          modules: ${{ matrix.modules }}
 
-      - name: Check Build Logs
-        run: |
-          if (Test-Path "Logs") {
-            Write-Host "Build logs generated successfully"
-            Get-ChildItem -Path "Logs" -Recurse
-          } else {
-            Write-Host "No build logs found"
-          }
-        shell: pwsh
-        continue-on-error: true
+      - run: |
+          echo "Step Outputs:"
+          echo "steps.unity-setup.unity-hub-path: '${{ steps.unity-setup.outputs.unity-hub-path }}'"
+          echo "steps.unity-setup.unity-editors: '${{ steps.unity-setup.outputs.unity-editors }}'"
+          echo "steps.unity-setup.unity-editor-path: '${{ steps.unity-setup.outputs.unity-editor-path }}'"
+          echo "steps.unity-setup.unity-project-path: '${{ steps.unity-setup.outputs.unity-project-path }}'"
+
+          echo "Environment Variables:"
+          echo "UNITY_HUB_PATH: '${{ env.UNITY_HUB_PATH }}'"
+          echo "UNITY_EDITORS: '${{ env.UNITY_EDITORS }}'"
+          echo "UNITY_EDITOR_PATH: '${{ env.UNITY_EDITOR_PATH }}'"
+          echo "UNITY_PROJECT_PATH: '${{ env.UNITY_PROJECT_PATH }}'"
+
+      - uses: RageAgainstThePixel/activate-unity-license@v2
+        with:
+          license: 'Personal' # Choose license type to use [ Personal, Professional, Floating ]
+          username: ${{ secrets.UNITY_USER}}
+          password: ${{ secrets.UNITY_ACC}}
