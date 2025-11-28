@@ -1,0 +1,154 @@
+name: "Run Unity Multi-Target Build"
+description: "Accepts an input of multiple build targets and runs a Unity build for each target specified."
+author: "reality-collective"
+inputs:
+  unity-editor-path:
+    description: "The path to the Unity editor executable."
+    required: true
+  unity-project-path:
+    description: "The path to the Unity project."
+    required: true
+  build-targets:
+    description: "Comma-separated list of build targets."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "1.0.0"
+        echo "Build Script Version: $scriptVersion"
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Run Unity Multi-Target Build
+      run: |
+        $unityProjectPath = '${{ inputs.unity-project-path }}'
+        $buildTargetsInput = '${{ inputs.build-targets }}'
+        $buildTargets = $buildTargetsInput -split ',' | ForEach-Object { $_.Trim() }
+        $editorrunpath = ${{ inputs.unity-editor-path }}
+
+        echo "::group::Set editor locations"
+
+        if ( (-not $global:PSVersionTable.Platform) -or ($global:PSVersionTable.Platform -eq "Win32NT") ) {
+          echo 'Building using Windows'
+
+          function unity-editor {
+            #$p = Start-Process -Verbose -NoNewWindow -PassThru -Wait -FilePath "$editorrunpath" -ArgumentList (@(' -batchmode') + $args.Split(" "))
+            & $editorrunpath -batchmode $args.Split(" ") | Out-String
+          }
+        }
+        elseif ( $global:PSVersionTable.OS.Contains("Darwin") ) {
+          echo 'Building using Mac'
+
+          function unity-editor {
+            #$p = Start-Process -Verbose -NoNewWindow -PassThru -Wait -FilePath "$editorrunpath" -ArgumentList (@(' -batchmode') + $args.Split(" "))
+            & $editorrunpath -batchmode $args.Split(" ") | Out-String
+          }
+        }
+        elseif ( $global:PSVersionTable.OS.Contains("Linux") ) {
+          echo 'Building using Linux'
+
+          function unity-editor {
+            xvfb-run --auto-servernum "$editorrunpath" -batchmode $args.Split(" ")
+          }
+        }
+        else
+        {
+          echo 'Unknown build platform'
+        }
+
+        echo "::endgroup::"   
+
+        echo "::group::Setup logging and run Unit tests"
+
+        # Log detail
+        $logDirectory = "Logs"          
+        if (Test-Path -Path $logDirectory) {
+            echo "Clearing logs from a previous run"
+            Remove-item $logDirectory -recurse
+          }
+
+        $logDirectory = New-Item -ItemType Directory -Force -Path $logDirectory | Select-Object
+
+        echo "Log Directory: $logDirectory"
+        $date = Get-Date -Format "yyyyMMddTHHmmss"
+
+        # If run manually, the Refname is actually blank, so just use date
+        if([string]::IsNullOrEmpty(${GITHUB_REF_NAME})) {
+          $logName = Join-Path $logDirectory $date
+        }else {
+          $logName = Join-Path $logDirectory ${GITHUB_REF_NAME}-$date
+        }
+
+        $logPath = "$unityMajorVersion_${{ matrix.build-target }}_$logName"
+        $testsLogPath = "$unityMajorVersion_${{ matrix.build-target }}_$logName-tests.xml"
+
+        echo "Logpath [$logPath]"
+        echo "TestsPath [$testsLogPath]"
+        echo "::endgroup::"
+
+        echo "::group::Grouping Package in a UPM folder"
+
+        $UPMFolderName = 'u'
+
+        if ( -not (Test-Path '$UPMFolderName') ) 
+        {
+          New-Item $UPMFolderName -ItemType Directory
+        }
+
+        Move-Item -Path * -Destination $UPMFolderName -exclude $UPMFolderName
+
+        echo "::endgroup::"             
+
+        echo "::group::Run builds for each target"
+        foreach ($target in $buildTargets) {
+          echo "Starting build for target: $target"
+          unity-editor -projectPath $unityProjectPath -logfile "$logPath-$target.log" -batchmode -nographics -quit -buildTarget $target
+
+          & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+          if ($LASTEXITCODE -ne 0) {
+            echo "Build failed for target: $target"
+            exit $LASTEXITCODE
+          } else {
+            echo "Build succeeded for target: $target"
+          }
+        }
+        echo "::endgroup::"             
+
+        echo "::group::Unity Unit tests Results"
+        if (Test-Path $testsLogPath) {
+          echo "Test Run results for ${GITHUB_REPOSITORY} Branch ${GITHUB_REF}"
+          echo ""
+          Select-Xml -Path $testsLogPath -XPath '/test-run/test-suite' | ForEach-Object { "Name: " +$_.Node.name, ", Result: " + $_.Node.result, ", Total Tests: " + $_.Node.total, ", Passed: " + $_.Node.passed, ", Failed: " + $_.Node.failed, ", Skipped: " + $_.Node.skipped }
+        }
+        else {
+          echo "No test results found for ${GITHUB_REPOSITORY} Branch ${GITHUB_REF} at $testsLogPath"
+          echo ""
+        }
+        echo "::endgroup::"
+
+        if($LASTEXITCODE -ne '0'){
+        echo "::group::Unity Unit tests errors"
+          $exitCode = $testResult.ExitCode
+          Get-Content $logPath
+          echo "Build failed due to errors ($LASTEXITCODE), please check the log at $logPath"
+        echo "::endgroup::"
+
+          exit $LASTEXITCODE
+        }
+
+      shell: pwsh
+    - name: Sanitize build targets for artifact name
+      id: sanitize
+      run: |
+        $buildTargets = '${{ inputs.build-targets }}'
+        $sanitized = $buildTargets -replace ',', '-' -replace ' ', ''
+        echo "targets=$sanitized" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: unity-build-log-${{ github.run_number }}-${{ github.run_attempt }}-${{ steps.sanitize.outputs.targets }}
+        path: Logs/**

@@ -32,13 +32,13 @@ jobs:
         include:
           - os: ubuntu-latest
             build-targets: StandaloneLinux64, Android, iOS
-            build-args: ''          
+            build-args: ""
           - os: windows-latest
             build-targets: StandaloneWindows64, Android, WSAPlayer
-            build-args: ''          
+            build-args: ""
           - os: macos-latest
             build-targets: StandaloneOSX, Android, iOS, VisionOS
-            build-args: ''          
+            build-args: ""
     steps:
       - uses: buildalon/unity-setup@v2
         id: unity-setup
@@ -83,9 +83,9 @@ jobs:
           unity-project-path: ${{ steps.create-unity-project.outputs.project-path }}
         continue-on-error: true
 
-      - uses: buildalon/unity-action@v3
-        name: '${{ matrix.build-targets }}-Build'
+      - name: Setup Unity UPM Build
+        uses: ./run-unity-multitarget-build
         with:
-          log-name: '${{ matrix.build-targets }}-Build'
-          build-target: '${{ matrix.build-targets }}'
-          args: '-quit -batchmode -executeMethod Buildalon.Editor.BuildPipeline.UnityPlayerBuildTools.StartCommandLineBuild${{ matrix.build-args }}'
+          unity-editor-path: ${{ steps.unity-setup.outputs.unity-editor-path }}
+          unity-project-path: ${{ steps.create-unity-project.outputs.project-path }}
+          build-targets: ${{ matrix.build-targets }}
