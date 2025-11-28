@@ -49,8 +49,8 @@ runs:
           $logName = Join-Path $logDirectory ${GITHUB_REF_NAME}-$date
         }
 
-        $logPath = "$unityMajorVersion_${{ matrix.build-target }}_$logName"
-        $testsLogPath = "$unityMajorVersion_${{ matrix.build-target }}_$logName-tests.xml"
+        $logPath = "$logName"
+        $testsLogPath = "$logName-tests.xml"
 
         echo "Logpath [$logPath]"
         echo "TestsPath [$testsLogPath]"
@@ -60,27 +60,36 @@ runs:
 
         $UPMFolderName = 'u'
 
-        if ( -not (Test-Path '$UPMFolderName') ) 
+        if ( -not (Test-Path $UPMFolderName) ) 
         {
           New-Item $UPMFolderName -ItemType Directory
         }
 
         Move-Item -Path * -Destination $UPMFolderName -exclude $UPMFolderName
 
+        # Update project path to account for moved files
+        $unityProjectPath = Join-Path $UPMFolderName $unityProjectPath
+
         echo "::endgroup::"             
 
         echo "::group::Run builds for each target"
         foreach ($target in $buildTargets) {
           echo "Starting build for target: $target"
+          $targetLogPath = Join-Path $logDirectory "Build_$target.log"
           
           if ( $global:PSVersionTable.OS.Contains("Linux") ) {
-            xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+            xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
           } else {
-            & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+            & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
           }
           
           if ($LASTEXITCODE -ne 0) {
             echo "Build failed for target: $target"
+            if (Test-Path $targetLogPath) {
+              echo "::group::Build Log for $target"
+              Get-Content $targetLogPath
+              echo "::endgroup::"
+            }
             exit $LASTEXITCODE
           } else {
             echo "Build succeeded for target: $target"
