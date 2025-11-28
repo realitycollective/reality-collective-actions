@@ -27,39 +27,6 @@ runs:
         $unityProjectPath = '${{ inputs.unity-project-path }}'
         $buildTargetsInput = '${{ inputs.build-targets }}'
         $buildTargets = $buildTargetsInput -split ',' | ForEach-Object { $_.Trim() }
-        $editorrunpath = ${{ inputs.unity-editor-path }}
-
-        echo "::group::Set editor locations"
-
-        if ( (-not $global:PSVersionTable.Platform) -or ($global:PSVersionTable.Platform -eq "Win32NT") ) {
-          echo 'Building using Windows'
-
-          function unity-editor {
-            #$p = Start-Process -Verbose -NoNewWindow -PassThru -Wait -FilePath "$editorrunpath" -ArgumentList (@(' -batchmode') + $args.Split(" "))
-            & $editorrunpath -batchmode $args.Split(" ") | Out-String
-          }
-        }
-        elseif ( $global:PSVersionTable.OS.Contains("Darwin") ) {
-          echo 'Building using Mac'
-
-          function unity-editor {
-            #$p = Start-Process -Verbose -NoNewWindow -PassThru -Wait -FilePath "$editorrunpath" -ArgumentList (@(' -batchmode') + $args.Split(" "))
-            & $editorrunpath -batchmode $args.Split(" ") | Out-String
-          }
-        }
-        elseif ( $global:PSVersionTable.OS.Contains("Linux") ) {
-          echo 'Building using Linux'
-
-          function unity-editor {
-            xvfb-run --auto-servernum "$editorrunpath" -batchmode $args.Split(" ")
-          }
-        }
-        else
-        {
-          echo 'Unknown build platform'
-        }
-
-        echo "::endgroup::"   
 
         echo "::group::Setup logging and run Unit tests"
 
@@ -105,9 +72,13 @@ runs:
         echo "::group::Run builds for each target"
         foreach ($target in $buildTargets) {
           echo "Starting build for target: $target"
-          unity-editor -projectPath $unityProjectPath -logfile "$logPath-$target.log" -batchmode -nographics -quit -buildTarget $target
-
-          & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+          
+          if ( $global:PSVersionTable.OS.Contains("Linux") ) {
+            xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+          } else {
+            & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile "Build_$target.log"
+          }
+          
           if ($LASTEXITCODE -ne 0) {
             echo "Build failed for target: $target"
             exit $LASTEXITCODE
