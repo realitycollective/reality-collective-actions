@@ -68,7 +68,9 @@ runs:
         Move-Item -Path * -Destination $UPMFolderName -exclude $UPMFolderName
 
         # Update project path to account for moved files
-        $unityProjectPath = Join-Path $UPMFolderName $unityProjectPath
+        # Resolve the path to handle relative paths correctly
+        $unityProjectPath = Resolve-Path -Path (Join-Path $UPMFolderName $unityProjectPath) -Relative
+        echo "Updated Unity Project Path: $unityProjectPath"
 
         echo "::endgroup::"             
 

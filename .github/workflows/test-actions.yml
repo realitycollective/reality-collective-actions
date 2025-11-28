@@ -83,7 +83,7 @@ jobs:
           unity-project-path: ${{ steps.create-unity-project.outputs.project-path }}
         continue-on-error: true
 
-      - name: Setup Unity UPM Build
+      - name: Run Unity Build
         uses: ./run-unity-multitarget-build
         with:
           unity-editor-path: ${{ steps.unity-setup.outputs.unity-editor-path }}
