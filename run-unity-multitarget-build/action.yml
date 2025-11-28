@@ -83,9 +83,9 @@ runs:
           echo "Starting build for target: $target"
           $targetLogPath = Join-Path $logDirectory "Build_$target.log"
           
-          $isLinux = $IsLinux -or ($PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.Platform -eq 'Unix')
+          $runningOnLinux = $IsLinux -or ($PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.Platform -eq 'Unix')
           
-          if ( $isLinux ) {
+          if ( $runningOnLinux ) {
             xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
           } else {
             & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
