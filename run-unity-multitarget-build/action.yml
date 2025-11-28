@@ -68,8 +68,12 @@ runs:
         Move-Item -Path * -Destination $UPMFolderName -exclude $UPMFolderName
 
         # Update project path to account for moved files
-        # Resolve the path to handle relative paths correctly
-        $unityProjectPath = Resolve-Path -Path (Join-Path $UPMFolderName $unityProjectPath) -Relative
+        # Convert to absolute path to avoid issues with Unity not finding the project
+        $currentPath = Get-Location
+        $unityProjectPath = Join-Path $UPMFolderName $unityProjectPath
+        $unityProjectPath = $unityProjectPath -replace '[\\/]\.[\\/]', '/' -replace '^\.[\\/]', ''
+        $unityProjectPath = Join-Path $currentPath $unityProjectPath
+        $unityProjectPath = $unityProjectPath -replace '\\', '/'
         echo "Updated Unity Project Path: $unityProjectPath"
 
         echo "::endgroup::"             
@@ -79,7 +83,9 @@ runs:
           echo "Starting build for target: $target"
           $targetLogPath = Join-Path $logDirectory "Build_$target.log"
           
-          if ( $global:PSVersionTable.OS.Contains("Linux") ) {
+          $isLinux = $IsLinux -or ($PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.Platform -eq 'Unix')
+          
+          if ( $isLinux ) {
             xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
           } else {
             & "${{ inputs.unity-editor-path }}" -quit -batchmode -projectPath $unityProjectPath -buildTarget $target -executeMethod BuildScript.PerformBuild -logFile $targetLogPath
