@@ -72,7 +72,12 @@ runs:
         $currentPath = Get-Location
         $unityProjectPath = Join-Path $UPMFolderName $unityProjectPath
         $unityProjectPath = $unityProjectPath -replace '[\\/]\.[\\/]', '/' -replace '^\.[\\/]', ''
-        $unityProjectPath = Join-Path $currentPath $unityProjectPath
+        
+        # Only join with current path if not already absolute
+        if (-not [System.IO.Path]::IsPathRooted($unityProjectPath)) {
+          $unityProjectPath = Join-Path $currentPath $unityProjectPath
+        }
+        
         $unityProjectPath = $unityProjectPath -replace '\\', '/'
         echo "Updated Unity Project Path: $unityProjectPath"
 
