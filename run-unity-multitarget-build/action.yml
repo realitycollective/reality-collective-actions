@@ -49,44 +49,18 @@ runs:
           $logName = Join-Path $logDirectory ${GITHUB_REF_NAME}-$date
         }
 
-        $logPath = "$logName"
-        $testsLogPath = "$logName-tests.xml"
+        $logPath = $logName
+        $testsLogPath = "$logName-tests"
 
         echo "Logpath [$logPath]"
         echo "TestsPath [$testsLogPath]"
         echo "::endgroup::"
 
-        echo "::group::Grouping Package in a UPM folder"
-
-        $UPMFolderName = 'u'
-
-        if ( -not (Test-Path $UPMFolderName) ) 
-        {
-          New-Item $UPMFolderName -ItemType Directory
-        }
-
-        Move-Item -Path * -Destination $UPMFolderName -exclude $UPMFolderName
-
-        # Update project path to account for moved files
-        # Convert to absolute path to avoid issues with Unity not finding the project
-        $currentPath = Get-Location
-        $unityProjectPath = Join-Path $UPMFolderName $unityProjectPath
-        $unityProjectPath = $unityProjectPath -replace '[\\/]\.[\\/]', '/' -replace '^\.[\\/]', ''
-        
-        # Only join with current path if not already absolute
-        if (-not [System.IO.Path]::IsPathRooted($unityProjectPath)) {
-          $unityProjectPath = Join-Path $currentPath $unityProjectPath
-        }
-        
-        $unityProjectPath = $unityProjectPath -replace '\\', '/'
-        echo "Updated Unity Project Path: $unityProjectPath"
-
-        echo "::endgroup::"             
-
         echo "::group::Run builds for each target"
         foreach ($target in $buildTargets) {
           echo "Starting build for target: $target"
           $targetLogPath = Join-Path $logDirectory "Build_$target.log"
+          $targetLogTestsPath = Join-Path $logDirectory "Build_$testsLogPath.xml"
           
           $runningOnLinux = $IsLinux -or ($PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.Platform -eq 'Unix')
           
@@ -109,18 +83,6 @@ runs:
           }
         }
         echo "::endgroup::"             
-
-        echo "::group::Unity Unit tests Results"
-        if (Test-Path $testsLogPath) {
-          echo "Test Run results for ${GITHUB_REPOSITORY} Branch ${GITHUB_REF}"
-          echo ""
-          Select-Xml -Path $testsLogPath -XPath '/test-run/test-suite' | ForEach-Object { "Name: " +$_.Node.name, ", Result: " + $_.Node.result, ", Total Tests: " + $_.Node.total, ", Passed: " + $_.Node.passed, ", Failed: " + $_.Node.failed, ", Skipped: " + $_.Node.skipped }
-        }
-        else {
-          echo "No test results found for ${GITHUB_REPOSITORY} Branch ${GITHUB_REF} at $testsLogPath"
-          echo ""
-        }
-        echo "::endgroup::"
 
         if($LASTEXITCODE -ne '0'){
         echo "::group::Unity Unit tests errors"
