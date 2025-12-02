@@ -2,7 +2,7 @@
 
 A collection of reusable composite GitHub Actions for Unity Package Manager (UPM) projects, built and maintained by the Reality Collective.
 
-[![Test Composite Actions](https://github.com/realitycollective/reality-collective-actions/actions/workflows/test-actions.yml/badge.svg)](https://github.com/realitycollective/reality-collective-actions/actions/workflows/test-actions.yml)
+[![Test Composite Actions](https://github.com/realitycollective/reality-collective-actions/actions/workflows/test-upm-build-actions.yml/badge.svg)](https://github.com/realitycollective/reality-collective-actions/actions/workflows/test-upm-build-actions.yml)
 
 ## Overview
 

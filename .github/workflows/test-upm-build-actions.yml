@@ -79,7 +79,7 @@ jobs:
           project-name: P
 
       - name: Setup Unity UPM Build
-        uses: ./setupUnityUPMbuild
+        uses: ./setup-unity-upm-build
         with:
           repository: realitycollective/com.realitycollective.package-test
           unity-project-path: ${{ steps.create-unity-project.outputs.project-path }}
