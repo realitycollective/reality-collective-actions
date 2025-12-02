@@ -1,0 +1,77 @@
+name: "Setup Unity UPM Build"
+description: "Orchestrate"
+author: "reality-collective"
+inputs:
+  unity-project-path:
+    description: "Path to the test Unity project, must already exist from workflow."
+    required: true
+  dependencies:
+    description: "JSON array of dependency objects: [{\"DependencyBranch\": \"domain/repo.git\"}]"
+    required: false
+  repository:
+    description: "Optional owner/repo of the UPM package to validate (defaults to current)"
+    required: false
+
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      id: init
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "2.0.0"
+        echo "Build Script Version: $scriptVersion"
+        $workflowWorkspace = Get-Location
+        echo "workflow-workspace=$workflowWorkspace" >> $env:GITHUB_OUTPUT
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Checkout (target or self)
+      uses: actions/checkout@v5
+      with:
+        repository: ${{ inputs.repository }}
+        submodules: recursive
+        clean: false
+        path: "${{ inputs.unity-project-path }}/Packages/UPM"
+    - name: Clone Dependencies (optional)
+      if: ${{ inputs.dependencies != '' }}
+      run: |
+        echo "::group::Clone Dependencies"
+        $projectPath = '${{ inputs.unity-project-path }}'
+        $packagesDir = Join-Path $projectPath 'Packages'
+        $dependencies = '${{ inputs.dependencies }}'
+        $JSONdependencies = $dependencies | ConvertFrom-Json
+        $manifestPath = Join-Path $packagesDir 'manifest.json'
+        $manifest = Get-Content $manifestPath | ConvertFrom-Json
+        $existing = $manifest.dependencies.PsObject.Properties | ForEach-Object {"$($_.Name)@$($_.Value),"}
+        foreach($dependency in $JSONdependencies){
+          $dependency.PsObject.Properties | ForEach-Object {
+            $depName = $_.Name
+            $depUrl = $_.Value
+            $depPath = $depName.Replace('/','_')
+            $cloneURL = "https://${{ github.actor }}:${{ github.token }}@$depUrl"
+            echo "Cloning $depName from $depUrl"
+            git clone -b $depName --single-branch $cloneURL $depPath
+            if(-not (Test-Path $depPath)) { Write-Error "Failed to clone $depName"; exit 1 }
+            if(Test-Path "$depPath/package.json") {
+              $depPkg = Get-Content "$depPath/package.json" | ConvertFrom-Json
+              $realName = $depPkg.name
+              Rename-Item $depPath $realName
+              Move-Item $realName -Destination $packagesDir
+            } else {
+              Move-Item "$depPath/*" -Destination $packagesDir
+            }
+            if (Test-Path "$packagesDir/$depName.json") {
+              $depManifest = Get-Content "$packagesDir/$depName.json" | ConvertFrom-Json
+              $depManifest.dependencies.PsObject.Properties | ForEach-Object { $existing += "$($_.Name)@$($_.Value)," }
+            }
+          }
+        }
+        $existing = $existing.Trim(',') | ConvertTo-Json
+        $existing = $existing.Replace('@','":"').Replace('[','{').Replace(']','}')
+        $newDepsObject = $existing | ConvertFrom-Json
+        $manifest.dependencies = $newDepsObject
+        $manifest | ConvertTo-Json | Set-Content $manifestPath
+        echo "Dependencies updated in manifest.json"
+        echo "::endgroup::"
+      shell: pwsh

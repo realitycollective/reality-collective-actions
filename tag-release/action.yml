@@ -1,0 +1,50 @@
+name: "Tag Release"
+description: "Tag a new release in the repository."
+author: "reality-collective"
+inputs:
+  version:
+    description: "The version number to tag in the repository."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "1.0.0"
+        echo "Build Script Version: $scriptVersion"
+        echo "::endgroup::"
+      shell: pwsh
+    - uses: actions/checkout@v5
+      with:
+        fetch-depth: 0
+        submodules: recursive
+        clean: true
+        token: ${{ secrets.GIT_PAT }}
+    - uses: actions/setup-node@v4
+    - name: Set Github vars
+      run: |
+        git config --global user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+        git config --global user.name "${GITHUB_ACTOR}"
+      shell: pwsh
+    - name: Check if Tag Exists
+      run: |
+        $tagVersion = "${{ inputs.version }}"
+        $tags = git tag
+        echo "Tags found are [$tags], searching for [$tagVersion]"
+        foreach ($tag in $tags)
+        {
+            if($tag.Trim() -eq "$tagVersion")
+            {
+              Write-Error "$tagVersion tag already exists"
+              exit 1
+            }
+        }
+      shell: pwsh
+    - name: Create tag and push
+      run: |
+        $tagVersion = "${{ inputs.version }}"
+        git tag -fa "v$tagVersion" -m "v$tagVersion Release [skip ci]"
+        git push origin "v$tagVersion" --force
+      shell: pwsh

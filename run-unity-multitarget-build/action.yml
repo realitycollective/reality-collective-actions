@@ -1,0 +1,222 @@
+name: "Run Unity Multi-Target Build"
+description: "Accepts an input of multiple build targets and runs a Unity build for each target specified."
+author: "reality-collective"
+inputs:
+  unity-editor-path:
+    description: "The path to the Unity editor executable."
+    required: true
+  unity-project-path:
+    description: "The path to the Unity project."
+    required: true
+  build-targets:
+    description: "Comma-separated list of build targets."
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Script Version
+      run: |
+        echo "::group::Script Versioning"
+        $scriptVersion = "1.0.0"
+        echo "Build Script Version: $scriptVersion"
+        echo "::endgroup::"
+      shell: pwsh
+    - name: Run Unity Multi-Target Build
+      run: |
+        $unityProjectPath = "${{ inputs.unity-project-path }}"
+        $buildTargetsInput = '${{ inputs.build-targets }}'
+        $buildTargets = $buildTargetsInput -split ',' | ForEach-Object { $_.Trim() }
+
+        echo "::group::Setup logging and run Unit tests"
+
+        # Log detail
+        $logDirectory = "Logs"          
+        if (Test-Path -Path $logDirectory) {
+            echo "Clearing logs from a previous run"
+            Remove-item $logDirectory -recurse
+          }
+
+        $logDirectory = New-Item -ItemType Directory -Force -Path $logDirectory | Select-Object
+
+        echo "Log Directory: $logDirectory"
+        $date = Get-Date -Format "yyyyMMddTHHmmss"
+
+        # If run manually, the Refname is actually blank, so just use date
+        if([string]::IsNullOrEmpty(${GITHUB_REF_NAME})) {
+          $logName = Join-Path $logDirectory $date
+        }else {
+          $logName = Join-Path $logDirectory ${GITHUB_REF_NAME}-$date
+        }
+
+        $logPath = $logName
+        $testsLogPath = "$logName-tests"
+
+        echo "Logpath [$logPath]"
+        echo "TestsPath [$testsLogPath]"
+        echo "::endgroup::"
+
+        echo "::group::Run builds for each target"
+        foreach ($target in $buildTargets) {
+          echo "Starting build for target: $target"
+          $targetLogPath = Join-Path $logDirectory "Build_$target.log"
+          $targetLogTestsPath = Join-Path $logDirectory "Build_$testsLogPath.xml"
+          
+          # Validate Unity editor path exists
+          if (-not (Test-Path "${{ inputs.unity-editor-path }}")) {
+            echo "::error::Unity editor not found at path: ${{ inputs.unity-editor-path }}"
+            exit 1
+          }
+          
+          # Validate Unity project path exists
+          if (-not (Test-Path $unityProjectPath)) {
+            echo "::error::Unity project not found at path: $unityProjectPath"
+            exit 1
+          }
+          
+          echo "Unity Editor: ${{ inputs.unity-editor-path }}"
+          echo "Project Path: $unityProjectPath"
+          echo "Build Target: $target"
+          echo "Log Path: $targetLogPath"
+          
+          $runningOnLinux = $IsLinux -or ($IsMacOS -eq $false -and $PSVersionTable.PSVersion.Major -ge 6 -and $PSVersionTable.Platform -eq 'Unix')
+          
+          $exitCode = $null
+          $unityError = $null
+          
+          try {
+            if ( $runningOnLinux ) {
+              echo "Running Unity with xvfb-run..."
+              
+              # Check if xvfb-run is available
+              $xvfbAvailable = Get-Command xvfb-run -ErrorAction SilentlyContinue
+              
+              if ($xvfbAvailable) {
+                # Use xvfb-run for headless Linux execution
+                $unityArgs = "-quit", "-batchmode", "-projectPath", $unityProjectPath, "-buildTarget", $target, "-logFile", $targetLogPath
+                & xvfb-run --auto-servernum "${{ inputs.unity-editor-path }}" @unityArgs
+                $exitCode = $LASTEXITCODE
+              } else {
+                echo "xvfb-run not found, attempting direct Unity execution..."
+                $unityArgs = "-quit", "-batchmode", "-nographics", "-projectPath", $unityProjectPath, "-buildTarget", $target, "-logFile", $targetLogPath
+                & "${{ inputs.unity-editor-path }}" @unityArgs
+                $exitCode = $LASTEXITCODE
+              }
+            } elseif ( $IsMacOS ) {
+              echo "Running Unity on macOS..."
+              $unityArgs = "-quit", "-batchmode", "-nographics", "-projectPath", $unityProjectPath, "-buildTarget", $target, "-logFile", $targetLogPath
+              & "${{ inputs.unity-editor-path }}" @unityArgs
+              $exitCode = $LASTEXITCODE
+            } else {
+              echo "Running Unity on Windows..."
+              
+              # Build the argument list as a single string for better compatibility
+              $unityArgs = @(
+                "-quit"
+                "-batchmode"
+                "-nographics"
+                "-silent-crashes"
+                "-projectPath", "`"$unityProjectPath`""
+                "-buildTarget", $target
+                "-logFile", "`"$targetLogPath`""
+              )
+              
+              echo "Command: ${{ inputs.unity-editor-path }} $($unityArgs -join ' ')"
+              
+              # Use Start-Process with redirected output to prevent hanging
+              $processInfo = New-Object System.Diagnostics.ProcessStartInfo
+              $processInfo.FileName = "${{ inputs.unity-editor-path }}"
+              $processInfo.Arguments = $unityArgs -join ' '
+              $processInfo.UseShellExecute = $false
+              $processInfo.RedirectStandardOutput = $true
+              $processInfo.RedirectStandardError = $true
+              $processInfo.CreateNoWindow = $true
+              
+              $process = New-Object System.Diagnostics.Process
+              $process.StartInfo = $processInfo
+              $process.Start() | Out-Null
+              
+              # Wait for process with timeout (30 minutes)
+              $timeoutMinutes = 30
+              if (-not $process.WaitForExit($timeoutMinutes * 60 * 1000)) {
+                echo "::error::Unity process timed out after $timeoutMinutes minutes"
+                $process.Kill()
+                $exitCode = -1
+              } else {
+                $exitCode = $process.ExitCode
+              }
+              
+              $process.Dispose()
+            }
+          } catch {
+            $unityError = $_.Exception.Message
+            echo "::error::Exception while running Unity: $unityError"
+          }
+          
+          echo "Unity process completed with exit code: $exitCode"
+          
+          if ($unityError) {
+            echo "::error::Unity command failed with exception: $unityError"
+          }
+          
+          # Check if log file was created
+          if (-not (Test-Path $targetLogPath)) {
+            echo "::warning::Log file was not created at $targetLogPath - Unity may not have started properly"
+          }
+          
+          if ($null -eq $exitCode) {
+            echo "::error::Exit code is null - Unity process may have failed to start"
+            if (Test-Path $targetLogPath) {
+              echo "::group::Build Log for $target"
+              Get-Content $targetLogPath
+              echo "::endgroup::"
+            }
+            echo "::error::Build failed for target: $target - Unity process did not return an exit code"
+            exit 1
+          }
+          
+          if ($exitCode -ne 0) {
+            echo "::error::Build failed for target: $target (exit code: $exitCode)"
+            if (Test-Path $targetLogPath) {
+              echo "::group::Build Log for $target"
+              Get-Content $targetLogPath
+              echo "::endgroup::"
+            } else {
+              echo "::warning::No build log found at $targetLogPath"
+            }
+            echo "::error::Stopping build process due to failure"
+            exit 1
+          } else {
+            echo "Build succeeded for target: $target"
+          }
+        }
+        echo "::endgroup::"
+        
+        echo "All builds completed successfully."
+
+      shell: pwsh
+    - name: Sanitize build targets for artifact name
+      id: sanitize
+      run: |
+        $buildTargets = '${{ inputs.build-targets }}'
+        $sanitized = $buildTargets -replace ',', '-' -replace ' ', ''
+        echo "targets=$sanitized" >> $env:GITHUB_OUTPUT
+        
+        # Create a unique identifier from the Unity editor path to differentiate versions
+        $unityPath = '${{ inputs.unity-editor-path }}'
+        $uniqueId = if ($unityPath -match '(\d+\.\d+\.\d+)') { 
+          $matches[1] -replace '\.', '-' 
+        } else { 
+          (Get-Date -Format "HHmmss")
+        }
+        echo "unity-version=$uniqueId" >> $env:GITHUB_OUTPUT
+        
+        # Get OS identifier
+        $osName = if ($IsLinux) { "linux" } elseif ($IsMacOS) { "macos" } else { "windows" }
+        echo "os=$osName" >> $env:GITHUB_OUTPUT
+      shell: pwsh
+    - uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: unity-build-log-${{ github.run_number }}-${{ github.run_attempt }}-${{ steps.sanitize.outputs.os }}-${{ steps.sanitize.outputs.unity-version }}-${{ steps.sanitize.outputs.targets }}
+        path: Logs/**
