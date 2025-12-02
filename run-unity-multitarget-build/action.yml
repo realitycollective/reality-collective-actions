@@ -22,6 +22,86 @@ runs:
         echo "Build Script Version: $scriptVersion"
         echo "::endgroup::"
       shell: pwsh
+    - name: Generate Artifact Name
+      id: artifact-name
+      run: |
+        $buildTargets = '${{ inputs.build-targets }}'
+        $sanitized = $buildTargets -replace ',', '-' -replace ' ', ''
+        
+        # Create a unique identifier from the Unity editor path to differentiate versions
+        $unityPath = '${{ inputs.unity-editor-path }}'
+        
+        # Try multiple regex patterns to match different Unity version formats
+        $uniqueId = if ($unityPath -match '(\d{4}\.\d+\.\d+)') {
+          # Matches Unity 2019.x.x, 2020.x.x, 2021.x.x, 2022.x.x format
+          $matches[1] -replace '\.', '-'
+        } elseif ($unityPath -match '(\d+\.\d+\.\d+)') {
+          # Matches Unity 6.x.x format or other standard version formats
+          $matches[1] -replace '\.', '-'
+        } elseif ($unityPath -match 'Unity[/\\](\d+)') {
+          # Try to extract year-based version from path
+          "unity-$($matches[1])"
+        } else {
+          # Use a combination of timestamp and random string for uniqueness
+          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+          $random = -join ((65..90) + (97..122) | Get-Random -Count 4 | ForEach-Object {[char]$_})
+          "$timestamp-$random"
+        }
+        
+        # Get OS identifier
+        $osName = if ($IsLinux) { "linux" } elseif ($IsMacOS) { "macos" } else { "windows" }
+        
+        # Validate that we have all required components for a unique artifact name
+        $validation = @{
+          'os' = $osName
+          'unity-version' = $uniqueId
+          'targets' = $sanitized
+        }
+        
+        $missingComponents = @()
+        foreach ($key in $validation.Keys) {
+          $value = $validation[$key]
+          if ([string]::IsNullOrWhiteSpace($value)) {
+            $missingComponents += $key
+            echo "::warning::Artifact name component '$key' is empty"
+          }
+        }
+        
+        # Generate a unique fallback ID that will be added to ensure uniqueness
+        $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+        $random = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 6 | ForEach-Object {[char]$_})
+        $uniqueFallback = "$timestamp-$random"
+        
+        # Build the final artifact name components
+        $runNumber = "${{ github.run_number }}"
+        $runAttempt = "${{ github.run_attempt }}"
+        
+        # Use fallback values for any missing components
+        $finalOs = if ([string]::IsNullOrWhiteSpace($osName)) { "unknown" } else { $osName }
+        $finalUnityVersion = if ([string]::IsNullOrWhiteSpace($uniqueId)) { "unknown" } else { $uniqueId }
+        $finalTargets = if ([string]::IsNullOrWhiteSpace($sanitized)) { "unknown" } else { $sanitized }
+        
+        # Always add unique fallback to prevent conflicts
+        $finalName = "unity-build-log-$runNumber-$runAttempt-$finalOs-$finalUnityVersion-$finalTargets-$uniqueFallback"
+        
+        # Set outputs
+        echo "artifact-name=$finalName" >> $env:GITHUB_OUTPUT
+        
+        # Display artifact name components
+        echo "::group::Artifact Name Components"
+        echo "Platform/OS:      $finalOs"
+        echo "Build Targets:    $finalTargets"
+        echo "Unity Version:    $finalUnityVersion"
+        echo "Run Number:       $runNumber"
+        echo "Run Attempt:      $runAttempt"
+        echo "Unique ID:        $uniqueFallback"
+        if ($missingComponents.Count -gt 0) {
+          echo "Missing Components: $($missingComponents -join ', ')"
+        }
+        echo ""
+        echo "Final Artifact Name: $finalName"
+        echo "::endgroup::"
+      shell: pwsh
     - name: Run Unity Multi-Target Build
       run: |
         $unityProjectPath = "${{ inputs.unity-project-path }}"
@@ -195,91 +275,8 @@ runs:
         echo "All builds completed successfully."
 
       shell: pwsh
-    - name: Sanitize build targets for artifact name
-      id: sanitize
-      run: |
-        $buildTargets = '${{ inputs.build-targets }}'
-        $sanitized = $buildTargets -replace ',', '-' -replace ' ', ''
-        echo "targets=$sanitized" >> $env:GITHUB_OUTPUT
-        
-        # Create a unique identifier from the Unity editor path to differentiate versions
-        $unityPath = '${{ inputs.unity-editor-path }}'
-        
-        # Try multiple regex patterns to match different Unity version formats
-        $uniqueId = if ($unityPath -match '(\d{4}\.\d+\.\d+)') {
-          # Matches Unity 2019.x.x, 2020.x.x, 2021.x.x, 2022.x.x format
-          $matches[1] -replace '\.', '-'
-        } elseif ($unityPath -match '(\d+\.\d+\.\d+)') {
-          # Matches Unity 6.x.x format or other standard version formats
-          $matches[1] -replace '\.', '-'
-        } elseif ($unityPath -match 'Unity[/\\](\d+)') {
-          # Try to extract year-based version from path
-          "unity-$($matches[1])"
-        } else {
-          # Use a combination of timestamp and random string for uniqueness
-          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
-          $random = -join ((65..90) + (97..122) | Get-Random -Count 4 | ForEach-Object {[char]$_})
-          "$timestamp-$random"
-        }
-        
-        echo "unity-version=$uniqueId" >> $env:GITHUB_OUTPUT
-        
-        # Get OS identifier
-        $osName = if ($IsLinux) { "linux" } elseif ($IsMacOS) { "macos" } else { "windows" }
-        echo "os=$osName" >> $env:GITHUB_OUTPUT
-        
-        # Validate that we have all required components for a unique artifact name
-        $validation = @{
-          'os' = $osName
-          'unity-version' = $uniqueId
-          'targets' = $sanitized
-        }
-        
-        $missingComponents = @()
-        foreach ($key in $validation.Keys) {
-          $value = $validation[$key]
-          if ([string]::IsNullOrWhiteSpace($value)) {
-            $missingComponents += $key
-            echo "::warning::Artifact name component '$key' is empty"
-          }
-        }
-        
-        # If any component is missing or empty, add a unique fallback suffix
-        if ($missingComponents.Count -gt 0) {
-          $fallbackSuffix = Get-Date -Format "yyyyMMdd-HHmmss"
-          $fallbackRandom = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 6 | ForEach-Object {[char]$_})
-          $fallbackId = "$fallbackSuffix-$fallbackRandom"
-          echo "fallback-id=$fallbackId" >> $env:GITHUB_OUTPUT
-          echo "::warning::Adding fallback ID to ensure unique artifact name: $fallbackId"
-        } else {
-          echo "fallback-id=" >> $env:GITHUB_OUTPUT
-        }
-        
-        # Build the final artifact name
-        $runNumber = "${{ github.run_number }}"
-        $runAttempt = "${{ github.run_attempt }}"
-        $fallbackId = if ($missingComponents.Count -gt 0) { "$fallbackSuffix-$fallbackRandom" } else { "" }
-        $finalName = "unity-build-log-$runNumber-$runAttempt-$osName-$uniqueId-$sanitized"
-        if ($fallbackId) {
-          $finalName += "-$fallbackId"
-        }
-        
-        # Display artifact name components
-        echo "::group::Artifact Name Components"
-        echo "Platform/OS:      $osName"
-        echo "Build Targets:    $sanitized"
-        echo "Unity Version:    $uniqueId"
-        echo "Run Number:       $runNumber"
-        echo "Run Attempt:      $runAttempt"
-        if ($fallbackId) {
-          echo "Fallback ID:      $fallbackId"
-        }
-        echo ""
-        echo "Final Artifact Name: $finalName"
-        echo "::endgroup::"
-      shell: pwsh
     - uses: actions/upload-artifact@v4
       if: always()
       with:
-        name: unity-build-log-${{ github.run_number }}-${{ github.run_attempt }}-${{ steps.sanitize.outputs.os }}-${{ steps.sanitize.outputs.unity-version }}-${{ steps.sanitize.outputs.targets }}${{ steps.sanitize.outputs.fallback-id && format('-{0}', steps.sanitize.outputs.fallback-id) || '' }}
+        name: ${{ steps.artifact-name.outputs.artifact-name }}
         path: Logs/**
