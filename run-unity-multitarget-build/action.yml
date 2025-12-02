@@ -204,11 +204,24 @@ runs:
         
         # Create a unique identifier from the Unity editor path to differentiate versions
         $unityPath = '${{ inputs.unity-editor-path }}'
-        $uniqueId = if ($unityPath -match '(\d+\.\d+\.\d+)') { 
-          $matches[1] -replace '\.', '-' 
-        } else { 
-          (Get-Date -Format "HHmmss")
+        
+        # Try multiple regex patterns to match different Unity version formats
+        $uniqueId = if ($unityPath -match '(\d{4}\.\d+\.\d+)') {
+          # Matches Unity 2019.x.x, 2020.x.x, 2021.x.x, 2022.x.x format
+          $matches[1] -replace '\.', '-'
+        } elseif ($unityPath -match '(\d+\.\d+\.\d+)') {
+          # Matches Unity 6.x.x format or other standard version formats
+          $matches[1] -replace '\.', '-'
+        } elseif ($unityPath -match 'Unity[/\\](\d+)') {
+          # Try to extract year-based version from path
+          "unity-$($matches[1])"
+        } else {
+          # Use a combination of timestamp and random string for uniqueness
+          $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+          $random = -join ((65..90) + (97..122) | Get-Random -Count 4 | ForEach-Object {[char]$_})
+          "$timestamp-$random"
         }
+        
         echo "unity-version=$uniqueId" >> $env:GITHUB_OUTPUT
         
         # Get OS identifier
