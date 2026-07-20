@@ -19,7 +19,7 @@ runs:
         echo "Build Script Version: $scriptVersion"
         echo "::endgroup::"
       shell: pwsh
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v7
       with:
         ref: ${{ inputs.target-branch }}
         clean: true

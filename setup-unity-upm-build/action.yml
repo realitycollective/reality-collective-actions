@@ -27,7 +27,7 @@ runs:
         echo "::endgroup::"
       shell: pwsh
     - name: Checkout (target or self)
-      uses: actions/checkout@v5
+      uses: actions/checkout@v7
       with:
         repository: ${{ inputs.repository }}
         submodules: recursive

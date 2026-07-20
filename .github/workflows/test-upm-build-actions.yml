@@ -64,7 +64,7 @@ jobs:
           echo "UNITY_PROJECT_PATH: '${{ env.UNITY_PROJECT_PATH }}'"
 
       - name: Checkout Actions (composite source)
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - uses: buildalon/activate-unity-license@v2
         if: runner.environment == 'github-hosted'

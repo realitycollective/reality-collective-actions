@@ -418,7 +418,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           
@@ -530,7 +530,7 @@ jobs:
     
     steps:
       - name: Checkout with Full History
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           token: ${{ secrets.GIT_PAT }}
